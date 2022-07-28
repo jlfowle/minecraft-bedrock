@@ -1,0 +1,30 @@
+name: 'Cleanup PR images'
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  get-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - id: get-versions
+        run: echo "::set-output name=versions::$(jq -c . <.github/workflows/versions.json)"
+  
+  purge-image:
+    name: Delete image from ghcr.io
+    needs: get-versions
+    strategy:
+      matrix:
+        version: fromJson(needs.get-versions.outputs.versions)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old images
+        uses: snok/container-retention-policy@v1
+        with:
+          image-names: minecraft-bedrock-${{ matrix.version }}
+          filter-tags: pr-${{ matrix.version }}-${{github.event.pull_request.number}}
+          cut-off: now UTC
+          account-type: personal
+          token: ${{ secrets.PACKAGE_CLEANUP_TOKEN }}

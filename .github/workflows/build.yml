@@ -1,0 +1,56 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  get-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - id: get-versions
+        run: echo "::set-output name=versions::$(jq -c . <.github/workflows/versions.json)"
+
+  build:
+    needs: get-versions
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        version: fromJson(needs.get-versions.outputs.versions)
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4.0.1
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ matrix.version }},enable={{is_default_branch}}
+            type=ref,enable=true,priority=600,prefix=pr-${{ matrix.version }}-,suffix=,event=pr
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3.0.0
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ matrix.version }}
