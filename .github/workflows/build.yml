@@ -24,7 +24,6 @@ jobs:
     steps:
       - run: |
           echo "${{needs.get-versions.outputs.versions}}"
-          echo "${{fromJson(needs.get-versions.outputs.versions)}}"
 
   build:
     needs: get-versions
